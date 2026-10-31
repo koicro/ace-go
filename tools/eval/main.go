@@ -39,6 +39,7 @@ const (
 	Pass Status = "pass"
 	Fail Status = "fail"
 	Skip Status = "skip"
+	Warn Status = "warn" // findings reported, but the gate still passes
 )
 
 // Step is one quality gate in the report.
@@ -61,6 +62,7 @@ type Report struct {
 	Tests     *TestSummary  `json:"tests,omitempty"`
 	Coverage  *CoverageInfo `json:"coverage,omitempty"`
 	Lint      []LintIssue   `json:"lint,omitempty"`
+	Nil       []NilIssue    `json:"nil,omitempty"`
 }
 
 type config struct {
@@ -70,6 +72,7 @@ type config struct {
 	skip         []string
 	coverExclude []string
 	printJSON    bool
+	strictNil    bool
 }
 
 func main() {
@@ -78,9 +81,10 @@ func main() {
 	flag.BoolVar(&cfg.quick, "quick", false, "fast mode: build, vet and short tests only")
 	flag.Float64Var(&cfg.minCoverage, "min-coverage", 80, "minimum total statement coverage (percent)")
 	flag.DurationVar(&cfg.fuzzTime, "fuzztime", 5*time.Second, "time to spend on each fuzz target (0 disables fuzzing)")
-	flag.StringVar(&skip, "skip", "", "comma-separated step names to skip (tidy,fmt,build,vet,lint,test,coverage,fuzz,vuln)")
+	flag.StringVar(&skip, "skip", "", "comma-separated step names to skip (tidy,fmt,build,vet,lint,nil,test,coverage,fuzz,vuln)")
 	flag.StringVar(&exclude, "cover-exclude", "/tools/", "comma-separated import-path substrings excluded from the coverage gate")
 	flag.BoolVar(&cfg.printJSON, "json", false, "print the full report as JSON to stdout instead of a summary")
+	flag.BoolVar(&cfg.strictNil, "strict-nil", false, "fail the gate on NilAway findings instead of only reporting them")
 	flag.Parse()
 	cfg.skip = splitList(skip)
 	cfg.coverExclude = splitList(exclude)
@@ -124,6 +128,7 @@ func run(ctx context.Context, cfg config) *Report {
 		{"build", true, stepBuild},
 		{"vet", true, stepVet},
 		{"lint", false, stepLint},
+		{"nil", false, stepNil},
 		{"test", true, stepTest},
 		{"coverage", false, stepCoverage},
 		{"fuzz", false, stepFuzz},
@@ -199,6 +204,44 @@ func stepLint(ctx context.Context, _ config, r *Report) Step {
 		details = append(details, is.String())
 	}
 	return Step{Status: Fail, Command: cmd, Summary: fmt.Sprintf("%d lint issue(s)", len(issues)), Details: capLines(details, 50)}
+}
+
+// stepNil runs NilAway, which tracks nil flows across function and package
+// boundaries (go vet's nilness only sees within one function). It has false
+// positives, so findings warn by default; -strict-nil makes them blocking.
+func stepNil(ctx context.Context, cfg config, r *Report) Step {
+	const cmd = "go tool nilaway -json -pretty-print=false -include-pkgs=<module> ./..."
+	mod, err := sh(ctx, "go", "list", "-m")
+	if err != nil {
+		return fromCmd("go list -m", mod, err, "cannot determine module path")
+	}
+	out, err := sh(ctx, "go", "tool", "nilaway", "-json", "-pretty-print=false",
+		"-include-pkgs="+strings.TrimSpace(string(mod)), "./...")
+	if err != nil {
+		return fromCmd(cmd, out, err, "nilaway failed to run")
+	}
+	root, _ := os.Getwd()
+	issues, err := parseNilAway(out, root)
+	if err != nil {
+		return Step{Status: Fail, Command: cmd, Summary: err.Error()}
+	}
+	r.Nil = issues
+	if len(issues) == 0 {
+		return Step{Status: Pass, Command: cmd, Summary: "no potential nil panics"}
+	}
+	details := make([]string, 0, len(issues))
+	for _, is := range issues {
+		details = append(details, is.String())
+	}
+	s := Step{
+		Status: Warn, Command: cmd, Details: capLines(details, 50),
+		Summary: fmt.Sprintf("%d potential nil panic(s) (report-only; -strict-nil to enforce)", len(issues)),
+	}
+	if cfg.strictNil {
+		s.Status = Fail
+		s.Summary = fmt.Sprintf("%d potential nil panic(s)", len(issues))
+	}
+	return s
 }
 
 func stepTest(ctx context.Context, cfg config, r *Report) Step {
@@ -339,10 +382,10 @@ func writeReport(r *Report) error {
 func printSummary(w io.Writer, r *Report) {
 	bw := bufio.NewWriter(w)
 	defer bw.Flush()
-	icon := map[Status]string{Pass: "PASS", Fail: "FAIL", Skip: "SKIP"}
+	icon := map[Status]string{Pass: "PASS", Fail: "FAIL", Skip: "SKIP", Warn: "WARN"}
 	for _, s := range r.Steps {
 		fmt.Fprintf(bw, "%-4s  %-9s %8s  %s\n", icon[s.Status], s.Name, s.Duration, s.Summary)
-		if s.Status == Fail {
+		if s.Status == Fail || s.Status == Warn {
 			for _, d := range s.Details {
 				for line := range strings.SplitSeq(d, "\n") {
 					fmt.Fprintf(bw, "      | %s\n", line)

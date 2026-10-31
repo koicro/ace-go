@@ -1,7 +1,7 @@
 # ace-go
 
 Go module `github.com/koicro/ace-go`. Toolchain is pinned in `mise.toml`
-(Go 1.27, golangci-lint v2); dev tools (govulncheck, benchstat) are `tool`
+(Go 1.27, golangci-lint v2); dev tools (govulncheck, benchstat, nilaway) are `tool`
 directives in `go.mod`, run them with `go tool <name>`.
 Run `make setup` once. `make` targets work without mise shell activation.
 
@@ -10,15 +10,22 @@ Run `make setup` once. `make` targets work without mise shell activation.
 A change is done when **`make eval` exits 0**. Don't claim success otherwise.
 
 `make eval` runs, in order: `tidy` → `fmt` → `build` → `vet` → `lint` →
-`test` (race, shuffled, coverage) → `coverage` (≥80% outside `tools/`) →
-`fuzz` (5s per target) → `vuln`. It writes `.eval/report.json`:
+`nil` → `test` (race, shuffled, coverage) → `coverage` (≥80% outside
+`tools/`) → `fuzz` (5s per target) → `vuln`. It writes `.eval/report.json`:
 
 ```sh
 jq '.steps[] | select(.status=="fail")' .eval/report.json   # what failed, with file:line
 jq '.tests.failures' .eval/report.json                        # failing tests + their output
 jq '.coverage.packages[:5]' .eval/report.json                 # least-covered packages
 jq '.lint' .eval/report.json                                  # lint issues
+jq '.nil' .eval/report.json                                   # potential nil panics (NilAway)
 ```
+
+The `nil` step (NilAway) is report-only: `WARN` doesn't fail the gate, but
+treat every finding in code you touched as a bug to fix, not noise. Each
+finding shows the nil flow from source to dereference. If one is a genuine
+false positive, restructure the code so the non-nil-ness is obvious rather
+than suppressing it.
 
 Inner loop while iterating: `make quick` (build, vet, `-short` tests), or a
 targeted `go test -run TestName ./internal/pkg`. A Stop hook runs `make quick`
@@ -37,6 +44,18 @@ with `go run ./tools/eval -skip=vuln` and say so.
 - Errors: wrap with `fmt.Errorf("doing x: %w", err)`; compare with
   `errors.Is`/`errors.As`. Accept `context.Context` as the first parameter of
   anything that does I/O.
+- Nil safety — Go's type system won't stop a nil panic, so design it out:
+  - "Not found" is `(T, bool)` or a sentinel error (`ErrNotFound`), never a
+    nil pointer. Never `return nil, nil` (the `nilnil` linter enforces this).
+  - Never return a typed nil as an `error`: `var e *MyErr; return e` makes
+    `err != nil` true. Return a literal `nil` on success.
+  - Make the zero value usable, or require a `NewXxx` constructor and keep
+    fields unexported so half-initialised structs can't exist.
+  - Initialise maps before writing (`make(map…)`); writing to a nil map panics.
+  - Take values, not pointers, unless the function mutates or the type is
+    large; check pointer parameters from outside the package at the boundary.
+  - Return empty (non-nil) slices where the result is serialised: nil
+    encodes as JSON `null`, empty as `[]`.
 - Use modern Go: `for range n`, `slices`/`maps`/`cmp`, `strings.SplitSeq`,
   `b.Loop()` in benchmarks, `t.Context()` in tests. The `modernize` linter
   flags older idioms.

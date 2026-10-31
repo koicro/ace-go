@@ -15,6 +15,7 @@ linters:
     - misspell
     - modernize
     - nilerr
+    - nilnil
     - noctx
     - perfsprint
     - revive

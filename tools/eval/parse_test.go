@@ -82,6 +82,37 @@ ok  	ex/c	0.07s
 	}
 }
 
+func TestParseNilAway(t *testing.T) {
+	out := `{
+	"ex/b": {"nilaway": [{"posn": "/Users/me/dev/ex/b/b.go:12:35", "message": "Potential nil panic detected.\n"}]},
+	"ex/a": {"nilaway": [{"posn": "/elsewhere/a.go:3:1", "message": "m"}]}
+}`
+	got, err := parseNilAway([]byte(out), "/Users/me/Dev/ex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []NilIssue{
+		{Position: "/elsewhere/a.go:3:1", Message: "m"},
+		{Position: "b/b.go:12:35", Message: "Potential nil panic detected.\n"},
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("parseNilAway = %+v, want %+v", got, want)
+	}
+	if s := got[1].String(); s != "b/b.go:12:35: Potential nil panic detected." {
+		t.Errorf("String() = %q", s)
+	}
+
+	if got, err := parseNilAway([]byte(`{}`), "/x"); err != nil || len(got) != 0 {
+		t.Errorf("empty output: got %v, %v; want no issues", got, err)
+	}
+	if _, err := parseNilAway([]byte(`{"ex/a": {"nilaway": {"error": "boom"}}}`), "/x"); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("analyzer error: got %v, want error containing boom", err)
+	}
+	if _, err := parseNilAway([]byte(`not json`), "/x"); err == nil {
+		t.Error("malformed output: want error")
+	}
+}
+
 func TestCapLines(t *testing.T) {
 	got := capLines([]string{"a", "b", "c"}, 2)
 	if len(got) != 3 || got[2] != "... 1 more (see .eval/)" {

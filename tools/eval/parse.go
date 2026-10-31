@@ -261,3 +261,51 @@ func parseLint(file string) ([]LintIssue, error) {
 	}
 	return issues, nil
 }
+
+// NilIssue is a potential nil panic reported by NilAway.
+type NilIssue struct {
+	Position string `json:"position"` // file:line:col, relative to the module root
+	Message  string `json:"message"`  // includes the nil flow from source to dereference
+}
+
+func (i NilIssue) String() string {
+	return i.Position + ": " + strings.TrimSpace(i.Message)
+}
+
+// parseNilAway parses `nilaway -json` output, shaped as
+// {"<pkg>": {"nilaway": [{"posn": ..., "message": ...}]}}. An analyzer
+// error replaces the list with {"error": "..."}.
+func parseNilAway(out []byte, root string) ([]NilIssue, error) {
+	var doc map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return nil, fmt.Errorf("parsing nilaway output: %w", err)
+	}
+	issues := []NilIssue{}
+	for pkg, analyzers := range doc {
+		for _, raw := range analyzers {
+			var diags []struct{ Posn, Message string }
+			if err := json.Unmarshal(raw, &diags); err != nil {
+				var e struct{ Error string }
+				if json.Unmarshal(raw, &e) == nil && e.Error != "" {
+					return nil, fmt.Errorf("nilaway on %s: %s", pkg, e.Error)
+				}
+				return nil, fmt.Errorf("parsing nilaway output for %s: %w", pkg, err)
+			}
+			for _, d := range diags {
+				issues = append(issues, NilIssue{Position: relPath(d.Posn, root), Message: d.Message})
+			}
+		}
+	}
+	slices.SortFunc(issues, func(a, b NilIssue) int { return cmp.Compare(a.Position, b.Position) })
+	return issues, nil
+}
+
+// relPath trims root from p. The comparison ignores case because macOS paths
+// are case-insensitive and tools may report /dev where the cwd says /Dev.
+func relPath(p, root string) string {
+	prefix := strings.TrimSuffix(root, "/") + "/"
+	if root != "" && len(p) > len(prefix) && strings.EqualFold(p[:len(prefix)], prefix) {
+		return p[len(prefix):]
+	}
+	return p
+}
