@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)",
+      "Bash(go run ./tools/eval:*)",
+      "Bash(go tool:*)",
+      "Bash(go list:*)",
+      "Bash(go doc:*)",
+      "Bash(go env:*)",
+      "Bash(go version)",
+      "Bash(go mod tidy:*)",
+      "Bash(go mod why:*)",
+      "Bash(go mod graph:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(mise install)",
+      "Bash(mise exec:*)",
+      "Bash(jq:*)"
+    ],
+    "deny": ["Edit(.eval/**)", "Write(.eval/**)"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {"matcher": "Edit|Write|MultiEdit",
+       "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-go.sh", "timeout": 30}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-gate.sh", "timeout": 300}]}
+    ]
+  }
+}
