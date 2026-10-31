@@ -4,6 +4,7 @@ export PATH := $(shell mise bin-paths 2>/dev/null | tr '\n' ':')$(PATH)
 FUZZTIME ?= 30s
 BENCH    ?= .
 COUNT    ?= 6
+EVAL     ?= go run ./tools/eval -strict-nil
 
 .DEFAULT_GOAL := check
 .PHONY: setup check eval eval-json quick test fmt lint fuzz bench bench-baseline bench-compare cover clean
@@ -15,10 +16,10 @@ setup: ## Install the pinned toolchain and download modules
 check: eval ## Alias for eval
 
 eval: ## Full quality gate (CI runs this). Writes .eval/report.json
-	go run ./tools/eval
+	$(EVAL)
 
 eval-json: ## Full gate, printing the JSON report to stdout
-	go run ./tools/eval -json
+	$(EVAL) -json
 
 quick: ## Fast inner loop: build, vet, short tests
 	go run ./tools/eval -quick
@@ -33,7 +34,7 @@ lint: ## Lint only
 	golangci-lint run ./...
 
 fuzz: ## Fuzz every target for FUZZTIME each
-	go run ./tools/eval -fuzztime=$(FUZZTIME) -skip=tidy,fmt,lint,vuln
+	go run ./tools/eval -fuzztime=$(FUZZTIME) -skip=tidy,fmt,lint,nil,vuln
 
 bench: ## Run benchmarks into .eval/bench/new.txt
 	@mkdir -p .eval/bench

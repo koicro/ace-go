@@ -21,11 +21,11 @@ jq '.lint' .eval/report.json                                  # lint issues
 jq '.nil' .eval/report.json                                   # potential nil panics (NilAway)
 ```
 
-The `nil` step (NilAway) is report-only: `WARN` doesn't fail the gate, but
-treat every finding in code you touched as a bug to fix, not noise. Each
-finding shows the nil flow from source to dereference. If one is a genuine
-false positive, restructure the code so the non-nil-ness is obvious rather
-than suppressing it.
+The `nil` step (NilAway) is blocking: `make eval` passes `-strict-nil`, so
+any potential nil panic fails the gate. Each finding shows the nil flow from
+source to dereference. If one is a genuine false positive, restructure the
+code so the non-nil-ness is obvious rather than suppressing it. (Running
+`go run ./tools/eval` without the flag reports findings as `WARN` only.)
 
 Inner loop while iterating: `make quick` (build, vet, `-short` tests), or a
 targeted `go test -run TestName ./internal/pkg`. A Stop hook runs `make quick`
