@@ -1,0 +1,65 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - gosec
+    - intrange
+    - misspell
+    - modernize
+    - nilerr
+    - noctx
+    - perfsprint
+    - revive
+    - testifylint
+    - thelper
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # noisy; optimise layout only where profiling says so
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: error-strings
+        - name: error-return
+        - name: context-as-argument
+    gosec:
+      excludes:
+        - G104 # duplicate of errcheck, which knows strings.Builder never fails
+        - G204 # subprocesses with variable args are the point of tools/eval
+        - G301 # 0755 dirs are fine for build output
+        - G306 # 0644 files are fine for build output
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [gosec, unparam, perfsprint]
+      - path: ^tools/
+        linters: [gosec]
+        text: G304 # dev tools read paths they wrote themselves
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/koicro/ace-go

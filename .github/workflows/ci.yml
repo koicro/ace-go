@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3
+      - run: go mod download
+      - run: make eval
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: eval-report
+          path: .eval/
+          if-no-files-found: ignore

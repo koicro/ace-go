@@ -1,0 +1,5 @@
+.eval/
+*.test
+*.prof
+/bin/
+.claude/settings.local.json

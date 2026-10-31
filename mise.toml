@@ -1,0 +1,4 @@
+# Pinned toolchain. `mise install` provisions everything needed for `make eval`.
+[tools]
+go = "1.27.3"
+golangci-lint = "2.15.0"
