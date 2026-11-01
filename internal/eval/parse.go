@@ -1,4 +1,4 @@
-package main
+package eval
 
 import (
 	"bufio"
@@ -234,7 +234,7 @@ func (i LintIssue) String() string {
 }
 
 func parseLint(file string) ([]LintIssue, error) {
-	b, err := os.ReadFile(file)
+	b, err := os.ReadFile(file) //nolint:gosec // our own .eval/lint.json
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +296,12 @@ func parseNilAway(out []byte, root string) ([]NilIssue, error) {
 			}
 		}
 	}
-	slices.SortFunc(issues, func(a, b NilIssue) int { return cmp.Compare(a.Position, b.Position) })
-	return issues, nil
+	// A package is analysed both alone and as compiled with its tests, so the
+	// same finding can appear under two package keys.
+	slices.SortFunc(issues, func(a, b NilIssue) int {
+		return cmp.Or(cmp.Compare(a.Position, b.Position), cmp.Compare(a.Message, b.Message))
+	})
+	return slices.Compact(issues), nil
 }
 
 // relPath trims root from p. The comparison ignores case because macOS paths

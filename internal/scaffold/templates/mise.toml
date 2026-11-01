@@ -1,0 +1,4 @@
+# Pinned toolchain. `mise install` provisions everything needed for `make eval`.
+[tools]
+go = "{{.GoVersion}}"
+golangci-lint = "{{.GolangciLintVersion}}"

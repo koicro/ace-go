@@ -5,7 +5,7 @@
       "Bash(go build:*)",
       "Bash(go test:*)",
       "Bash(go vet:*)",
-      "Bash(go run ./tools/eval:*)",
+      "Bash(go run ./cmd/ace:*)",
       "Bash(go tool:*)",
       "Bash(go list:*)",
       "Bash(go doc:*)",

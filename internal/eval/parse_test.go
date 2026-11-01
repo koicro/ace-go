@@ -1,4 +1,4 @@
-package main
+package eval
 
 import (
 	"math"
@@ -85,7 +85,8 @@ ok  	ex/c	0.07s
 func TestParseNilAway(t *testing.T) {
 	out := `{
 	"ex/b": {"nilaway": [{"posn": "/Users/me/dev/ex/b/b.go:12:35", "message": "Potential nil panic detected.\n"}]},
-	"ex/a": {"nilaway": [{"posn": "/elsewhere/a.go:3:1", "message": "m"}]}
+	"ex/a": {"nilaway": [{"posn": "/elsewhere/a.go:3:1", "message": "m"}]},
+	"ex/a [ex/a.test]": {"nilaway": [{"posn": "/elsewhere/a.go:3:1", "message": "m"}]}
 }`
 	got, err := parseNilAway([]byte(out), "/Users/me/Dev/ex")
 	if err != nil {

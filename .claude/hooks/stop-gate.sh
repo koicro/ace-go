@@ -11,7 +11,7 @@ cd "${CLAUDE_PROJECT_DIR:-.}"
 # Only gate when Go sources or module files have uncommitted changes.
 git status --porcelain --untracked-files=all -- '*.go' go.mod go.sum | grep -q . || exit 0
 
-if ! out=$(mise exec -- go run ./tools/eval -quick 2>&1); then
+if ! out=$(mise exec -- go run ./cmd/ace eval -quick 2>&1); then
   {
     echo "Quick eval failed on your uncommitted Go changes. Fix these before finishing"
     echo "(full details: .eval/report.json):"
