@@ -203,6 +203,14 @@ func Name(id int) string { return find(id).name }
 		}
 	})
 
+	t.Run("no packages", func(t *testing.T) {
+		t.Parallel()
+		r := eval.Run(t.Context(), config(fixture(t, map[string]string{"go.mod": goMod})))
+		if r.Status != eval.Fail || len(r.Steps) != 1 || r.Steps[0].Name != "packages" {
+			t.Errorf("empty module: want a single failed packages step\n%s", summary(r))
+		}
+	})
+
 	t.Run("build", func(t *testing.T) {
 		t.Parallel()
 		dir := fixture(t, map[string]string{"go.mod": goMod, "f.go": "package fixture\n\nfunc broken( {\n"})

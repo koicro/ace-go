@@ -113,7 +113,31 @@ func Run(ctx context.Context, cfg Config) *Report {
 		return r
 	}
 	ru := &runner{cfg: cfg, dir: dir, out: filepath.Join(dir, OutDir), r: r}
+	// Every step fails confusingly on a module with no packages (for
+	// example right after `go mod init`), so report that once instead.
+	if out, _ := ru.sh(ctx, "go", "list", "./..."); bytes.Contains(out, []byte("matched no packages")) {
+		r.Steps = append(r.Steps, Step{
+			Name: "packages", Status: Fail, Command: "go list ./...",
+			Summary: "no Go packages to evaluate: add a package (and its tests) first",
+		})
+	} else {
+		ru.runSteps(ctx)
+	}
 
+	r.Duration = time.Since(start).Round(time.Millisecond).String()
+	r.Status = Pass
+	if slices.ContainsFunc(r.Steps, func(s Step) bool { return s.Status == Fail }) {
+		r.Status = Fail
+	}
+	if err := ru.writeReport(); err != nil {
+		r.Steps = append(r.Steps, Step{Name: "report", Status: Fail, Summary: err.Error()})
+		r.Status = Fail
+	}
+	return r
+}
+
+func (ru *runner) runSteps(ctx context.Context) {
+	r, cfg := ru.r, ru.cfg
 	steps := map[string]func(context.Context) Step{
 		"tidy": ru.tidy, "fmt": ru.fmt, "build": ru.build, "vet": ru.vet, "lint": ru.lint,
 		"nil": ru.nilaway, "test": ru.test, "coverage": ru.coverage, "fuzz": ru.fuzz, "vuln": ru.vuln,
@@ -136,17 +160,6 @@ func Run(ctx context.Context, cfg Config) *Report {
 			break
 		}
 	}
-
-	r.Duration = time.Since(start).Round(time.Millisecond).String()
-	r.Status = Pass
-	if slices.ContainsFunc(r.Steps, func(s Step) bool { return s.Status == Fail }) {
-		r.Status = Fail
-	}
-	if err := ru.writeReport(); err != nil {
-		r.Steps = append(r.Steps, Step{Name: "report", Status: Fail, Summary: err.Error()})
-		r.Status = Fail
-	}
-	return r
 }
 
 func (ru *runner) tidy(ctx context.Context) Step {
